@@ -1,0 +1,25 @@
+{
+  "name": "Aurora Trades",
+  "short_name": "Aurora",
+  "description": "Aurora Trades \u2013 Membership & Activity Platform",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101B2D",
+  "theme_color": "#101B2D",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

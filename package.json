@@ -1,0 +1,12 @@
+{
+  "name": "aurora-trades",
+  "version": "3.0.0",
+  "description": "Aurora Trades multi-device platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

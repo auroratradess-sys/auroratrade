@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aurora Trades – Control Centre</title>
+<meta name="theme-color" content="#101B2D"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{navy:{DEFAULT:'#101B2D',deep:'#17263B'},emerald:'#16866A',gold:'#C6A66B',soft:'#8A96A5',danger:'#C94C4C'},fontFamily:{sans:['Manrope','system-ui','sans-serif']}}}}</script>
+<style>
+body{font-family:Manrope,system-ui,sans-serif;background:#101B2D;color:#F7F5EF;margin:0}
+.card{background:#17263B;border:1px solid #1e2f48;border-radius:16px}
+.btn{background:#C6A66B;color:#101B2D;border:none;font-weight:600}
+input,select,textarea{background:#101B2D;border:1px solid #1e2f48;color:#F7F5EF;border-radius:12px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#C6A66B}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999}
+.dot-on{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block}
+.dot-off{width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block}
+</style>
+</head>
+<body class="min-h-screen">
+<div id="toast" class="toast hidden"></div>
+<div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="card p-8 w-full max-w-md">
+    <h1 class="text-2xl font-extrabold text-white text-center mb-2">Control Centre</h1>
+    <p class="text-sm text-soft text-center mb-6">Live multi-device admin</p>
+    <form id="admin-login" class="space-y-4">
+      <input type="tel" id="admin-phone" maxlength="11" placeholder="Admin phone" class="w-full px-4 py-3"/>
+      <input type="password" id="admin-pass" placeholder="Password" class="w-full px-4 py-3"/>
+      <p id="login-err" class="text-danger text-sm hidden"></p>
+      <button type="submit" class="btn w-full py-3.5 rounded-xl">Enter</button>
+    </form>
+  </div>
+</div>
+<div id="dashboard" class="hidden min-h-screen">
+  <header class="border-b border-[#1e2f48] px-4 py-4 flex justify-between items-center sticky top-0 bg-navy/95 z-20">
+    <div><h1 class="font-bold text-white">Control Centre</h1><p class="text-xs text-soft">Live database</p></div>
+    <button onclick="logout()" class="text-sm text-danger">Logout</button>
+  </header>
+  <main class="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="stats"></div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Pending Activity Approvals</h2><div id="task-pending"></div></div>
+    <div class="card p-5">
+      <h2 class="font-bold text-lg text-white mb-3">Quick VIP Upgrade</h2>
+      <p class="text-sm text-soft mb-3">Pays ₦850 referral if first VIP</p>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input type="tel" id="up-phone" maxlength="11" placeholder="Phone" class="flex-1 px-4 py-3"/>
+        <select id="up-level" class="px-4 py-3"><option value="0">Remove</option><option value="1">VIP 1</option><option value="2">VIP 2</option><option value="3">VIP 3</option><option value="4">VIP 4</option></select>
+        <button onclick="quickUpgrade()" class="btn px-6 py-3 rounded-xl">Upgrade</button>
+      </div>
+      <p id="up-msg" class="text-sm mt-2 hidden"></p>
+    </div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Pending Withdrawals</h2><div id="pending-list"></div></div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Users</h2>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-soft border-b border-[#1e2f48]"><th class="pb-2 pr-2">On</th><th class="pb-2 pr-3">Name</th><th class="pb-2 pr-3">Phone</th><th class="pb-2 pr-3">VIP</th><th class="pb-2 pr-3">Bal</th><th class="pb-2">Status</th></tr></thead><tbody id="users-table"></tbody></table></div>
+    </div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Referrals</h2><div id="ref-list" class="max-h-64 overflow-y-auto"></div></div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Recent Activities</h2><div id="tasks-list" class="max-h-48 overflow-y-auto"></div></div>
+    <div class="card p-5"><h2 class="font-bold text-lg text-white mb-3">Announcement</h2>
+      <textarea id="ann-text" rows="2" class="w-full px-4 py-3 mb-3" placeholder="Message..."></textarea>
+      <button onclick="sendAnn()" class="btn px-6 py-2.5 rounded-xl text-sm">Send</button>
+    </div>
+  </main>
+</div>
+<script>
+const API='', ADMIN_SESS='aurora_live_admin';
+async function api(path,opts={}){const res=await fetch(API+path,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Failed');return data;}
+function money(n){return '₦'+Number(n).toLocaleString('en-NG');}
+function fdate(i){return new Date(i).toLocaleString('en-NG',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
+function toast(m,t='success'){const el=document.getElementById('toast');el.className=`toast ${t==='error'?'bg-danger':'bg-emerald'} text-white px-5 py-3 rounded-xl text-sm font-medium`;el.textContent=m;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),3000);}
+function isOnline(u){return u.lastActive&&(Date.now()-new Date(u.lastActive).getTime())<120000;}
+
+document.getElementById('admin-login').onsubmit=async e=>{
+  e.preventDefault();
+  try{
+    const data=await api('/api/login',{method:'POST',body:JSON.stringify({phone:document.getElementById('admin-phone').value.trim(),password:document.getElementById('admin-pass').value})});
+    if(data.user.role!=='admin'){document.getElementById('login-err').textContent='Not admin';document.getElementById('login-err').classList.remove('hidden');return;}
+    localStorage.setItem(ADMIN_SESS,JSON.stringify({id:data.user.id}));showDash();
+  }catch(err){document.getElementById('login-err').textContent=err.message;document.getElementById('login-err').classList.remove('hidden');}
+};
+function logout(){localStorage.removeItem(ADMIN_SESS);document.getElementById('dashboard').classList.add('hidden');document.getElementById('login-screen').classList.remove('hidden');}
+function showDash(){document.getElementById('login-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');render();setInterval(render,12000);}
+
+async function render(){
+  try{
+    const [stats,usersData,pendingData,taskPend,tasksData,refsData]=await Promise.all([
+      api('/api/admin/stats'),api('/api/admin/users'),api('/api/admin/pending'),
+      api('/api/admin/pending-tasks'),api('/api/admin/completed-tasks'),api('/api/admin/referrals')
+    ]);
+    document.getElementById('stats').innerHTML=`
+      <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-gold">${stats.totalUsers}</p><p class="text-xs text-soft">Users</p></div>
+      <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-emerald">${stats.online||0}</p><p class="text-xs text-soft">Online</p></div>
+      <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-amber-400">${stats.pendingTasks||0}</p><p class="text-xs text-soft">Tasks</p></div>
+      <div class="card p-4 text-center"><p class="text-2xl font-extrabold text-orange-400">${stats.pendingWithdrawals}</p><p class="text-xs text-soft">WD</p></div>`;
+
+    const tp=taskPend.tasks||[];
+    document.getElementById('task-pending').innerHTML=tp.length===0?'<p class="text-soft text-sm text-center py-6">No pending</p>':tp.map(t=>`
+      <div class="border border-amber-900/40 bg-amber-950/20 rounded-xl p-4 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div><p class="font-bold text-white">${t.userName} (${t.userPhone})</p><p class="text-sm text-gold font-semibold">${money(t.reward)} · VIP ${t.vipLevel} · ${fdate(t.date)}</p></div>
+        <div class="flex gap-2"><button onclick="approveTask('${t.id}')" class="px-4 py-2 rounded-xl bg-emerald text-white text-sm font-bold">Approve</button>
+        <button onclick="rejectTask('${t.id}')" class="px-4 py-2 rounded-xl bg-danger text-white text-sm font-bold">Reject</button></div>
+      </div>`).join('');
+
+    const pending=pendingData.pending||[];
+    document.getElementById('pending-list').innerHTML=pending.length===0?'<p class="text-soft text-sm text-center py-6">None</p>':pending.map(w=>{
+      const u=(usersData.users||[]).find(x=>x.id===w.userId);
+      return `<div class="border border-orange-900/40 rounded-xl p-4 mb-3 flex flex-col sm:flex-row justify-between gap-3">
+        <div><p class="font-bold">${u?u.name:'User'} (${u?u.phone:''})</p><p class="text-sm text-gold">${money(w.amount)} → ${w.provider}</p><p class="text-xs text-soft">${w.account} · ${w.name}</p></div>
+        <div class="flex gap-2"><button onclick="actWd('${w.id}','approve')" class="px-4 py-2 rounded-xl bg-emerald text-white text-sm font-bold">OK</button>
+        <button onclick="actWd('${w.id}','reject')" class="px-4 py-2 rounded-xl bg-danger text-white text-sm font-bold">No</button></div></div>`;
+    }).join('');
+
+    const users=usersData.users||[];
+    document.getElementById('users-table').innerHTML=users.length===0?'<tr><td colspan="6" class="py-6 text-center text-soft">No users</td></tr>':users.map(u=>`
+      <tr class="border-b border-[#1e2f48]"><td class="py-3 pr-2"><span class="${isOnline(u)?'dot-on':'dot-off'}"></span></td>
+      <td class="pr-3 font-medium text-white">${u.name}</td><td class="pr-3 text-soft">${u.phone}</td>
+      <td class="pr-3"><select onchange="setVip('${u.phone}',this.value)" class="text-xs rounded px-2 py-1 bg-navy border border-[#1e2f48]">
+        <option value="0" ${u.vipLevel===0?'selected':''}>None</option><option value="1" ${u.vipLevel===1?'selected':''}>1</option>
+        <option value="2" ${u.vipLevel===2?'selected':''}>2</option><option value="3" ${u.vipLevel===3?'selected':''}>3</option>
+        <option value="4" ${u.vipLevel===4?'selected':''}>4</option></select></td>
+      <td class="pr-3 text-gold font-semibold">${money(u.balance)}</td>
+      <td><button onclick="toggleStatus('${u.id}')" class="text-xs ${u.status==='active'?'text-danger':'text-emerald'}">${u.status==='active'?'Suspend':'Activate'}</button></td></tr>`).join('');
+
+    const refs=refsData.referrals||[];
+    document.getElementById('ref-list').innerHTML=refs.length===0?'<p class="text-soft text-sm text-center py-4">None</p>':refs.map(r=>`
+      <div class="flex justify-between py-2 border-b border-[#1e2f48] text-sm"><div><p class="text-white">${r.referredName} (${r.referredPhone})</p><p class="text-xs text-soft">${fdate(r.date)}</p></div>
+      <span class="text-xs ${r.credited?'text-emerald':'text-soft'}">${r.credited?'Paid '+money(r.reward):'Pending'}</span></div>`).join('');
+
+    const tasks=tasksData.tasks||[];
+    document.getElementById('tasks-list').innerHTML=tasks.length===0?'<p class="text-soft text-sm text-center py-4">None</p>':tasks.map(t=>`
+      <div class="flex justify-between py-2 border-b border-[#1e2f48] text-sm"><div><p class="text-white">${t.userName}</p><p class="text-xs text-soft">${fdate(t.date)} · ${t.status}</p></div>
+      <span class="font-semibold ${t.status==='approved'?'text-emerald':'text-amber-400'}">${money(t.reward)}</span></div>`).join('');
+  }catch(e){toast('Load failed: '+e.message,'error');}
+}
+
+async function approveTask(id){try{await api('/api/admin/approve-task',{method:'POST',body:JSON.stringify({id})});toast('Approved');render();}catch(e){toast(e.message,'error');}}
+async function rejectTask(id){try{await api('/api/admin/reject-task',{method:'POST',body:JSON.stringify({id})});toast('Rejected');render();}catch(e){toast(e.message,'error');}}
+async function quickUpgrade(){
+  const phone=document.getElementById('up-phone').value.trim(),level=parseInt(document.getElementById('up-level').value);
+  const msg=document.getElementById('up-msg');
+  try{const d=await api('/api/admin/set-vip',{method:'POST',body:JSON.stringify({phone,level})});
+  msg.textContent=`✓ ${d.name} → VIP ${d.vipLevel}`+(d.referralPaid?' · Bonus to '+d.referralPaid:'');
+  msg.className='text-sm mt-2 text-emerald';msg.classList.remove('hidden');toast(msg.textContent);render();
+  }catch(e){msg.textContent=e.message;msg.className='text-sm mt-2 text-danger';msg.classList.remove('hidden');}
+}
+async function setVip(phone,level){try{await api('/api/admin/set-vip',{method:'POST',body:JSON.stringify({phone,level:parseInt(level)})});toast('VIP updated');render();}catch(e){toast(e.message,'error');}}
+async function actWd(id,action){try{await api('/api/admin/withdrawal-action',{method:'POST',body:JSON.stringify({id,action})});toast(action);render();}catch(e){toast(e.message,'error');}}
+async function toggleStatus(userId){try{const d=await api('/api/admin/toggle-status',{method:'POST',body:JSON.stringify({userId})});toast(d.status);render();}catch(e){toast(e.message,'error');}}
+async function sendAnn(){const text=document.getElementById('ann-text').value.trim();if(!text)return;try{await api('/api/admin/announce',{method:'POST',body:JSON.stringify({text})});toast('Sent');document.getElementById('ann-text').value='';}catch(e){toast(e.message,'error');}}
+if(localStorage.getItem(ADMIN_SESS))showDash();
+</script>
+</body>
+</html>
